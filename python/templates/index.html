@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner</title>
+
+    <!-- Add Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.3.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.3.0/firebase-database-compat.js"></script>
+
+    <script>
+        // Initialize Firebase with your project config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDzTbyNeS32kuq0zkq5N-RIB-q0GAQESko",
+            authDomain: "iot-d601d.firebaseapp.com",
+            databaseURL: "https://iot-d601d-default-rtdb.firebaseio.com",
+            projectId: "iot-d601d",
+            storageBucket: "iot-d601d.appspot.com",
+            messagingSenderId: "978468410705",
+            appId: "1:978468410705:web:8865f490d399f54dba6f70",
+            measurementId: "G-FLQQMDGSWV"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('submitBtn').addEventListener('click', function () {
+                const name = document.getElementById('name').innerText.split(': ')[1];
+                const adminUid = document.getElementById('adminUid').innerText.split(': ')[1];
+                const email = document.getElementById('email').innerText.split(': ')[1];
+                const id = document.getElementById('id').innerText.split(': ')[1];
+                const seats = document.getElementById('seats').innerText.split(': ')[1];
+
+                const scannersRef = firebase.database().ref('scanners');
+                const userSeatsRef = firebase.database().ref('userSeats').child(adminUid);
+
+                scannersRef.once('value', function(snapshot) {
+                    const data = snapshot.val();
+
+                    if (data) {
+                        // Data exists, now check if the details match
+                        let dataExists = false;
+
+                        Object.values(data).forEach(item => {
+                            if (
+                                item.name === name &&
+                                item.adminUid === adminUid &&
+                                item.email === email &&
+                                item.id === id &&
+                                item.seats === seats
+                            ) {
+                                dataExists = true;
+                            }
+                        });
+
+                        if (dataExists) {
+                            alert('Signout !!!');
+
+                            // Your existing code for marking seats false
+                            seats.split(',').forEach(seat => {
+                                userSeatsRef.child(seat.trim()).set(false)
+                                    .then(function() {
+                                        console.log('Seat ' + seat.trim() + ' marked as false successfully');
+                                    })
+                                    .catch(function(error) {
+                                        console.error('Error marking seat ' + seat.trim() + ' as false:', error);
+                                    });
+                            });
+
+                            // Your existing code for deleting data by specific ID
+                            const scannerToDelete = Object.keys(data).find(key => {
+                                const item = data[key];
+                                return (
+                                    item.name === name &&
+                                    item.adminUid === adminUid &&
+                                    item.email === email &&
+                                    item.id === id &&
+                                    item.seats === seats
+                                );
+                            });
+
+                            if (scannerToDelete) {
+                                scannersRef.child(scannerToDelete).remove()
+                                    .then(function() {
+                                        console.log('Data deleted successfully');
+                                    })
+                                    .catch(function(error) {
+                                        console.error('Error deleting data:', error);
+                                    });
+                            } else {
+                                console.error('Data not found for deletion');
+                            }
+                        } else {
+                            alert('Data is present but with different details');
+
+                            // Add the new data to the database
+                            scannersRef.push({
+                                name: name,
+                                adminUid: adminUid,
+                                email: email,
+                                id: id,
+                                seats: seats,
+                            });
+
+                            alert('New data added to Firebase!');
+                        }
+                    } else {
+                        alert('Data is not there and added');
+
+                        // Add the data to the database
+                        scannersRef.push({
+                            name: name,
+                            adminUid: adminUid,
+                            email: email,
+                            id: id,
+                            seats: seats,
+                        });
+
+                        alert('Login!!!');
+                    }
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>QR Code Scanner</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <button id="captureBtn">Capture</button>
+    <canvas id="canvas" style="display:none;"></canvas>
+    
+    <!-- Display raw QR code data -->
+    <div id="qrCodeData"></div>
+
+    <!-- Display extracted information -->
+    <div id="name"></div>
+    <div id="adminUid"></div>
+    <div id="email"></div>
+    <div id="id"></div>
+    <div id="seats"></div>
+
+    <!-- Submit button to store data in Firebase -->
+    <button id="submitBtn">Submit Data to Firebase</button>
+    
+    <script>
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function (stream) {
+                var video = document.getElementById('video');
+                video.srcObject = stream;
+
+                document.getElementById('captureBtn').addEventListener('click', function () {
+                    var canvas = document.getElementById('canvas');
+                    var context = canvas.getContext('2d');
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    var imageData = canvas.toDataURL('image/png');
+                    
+                    fetch('/capture', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ imageData: imageData }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('qrCodeData').innerText = 'QR Code Data: ' + data.qrCodeData;
+
+                        const qrCodeData = JSON.parse(data.qrCodeData);
+                        const adminUid = qrCodeData.adminUid || 'N/A';
+                        const name = qrCodeData.name || 'N/A';
+                        const email = qrCodeData.email || 'N/A';
+                        const id = qrCodeData.id || 'N/A';
+                        const seats = qrCodeData.seats || 'N/A';
+
+                        document.getElementById('name').innerText = 'Name: ' + name;
+                        document.getElementById('adminUid').innerText = 'Admin ID: ' + adminUid;
+                        document.getElementById('email').innerText = 'Email: ' + email;
+                        document.getElementById('id').innerText = 'ID: ' + id;
+                        document.getElementById('seats').innerText = 'Seat: ' + seats;
+                    })
+                    .catch(error => {
+                        console.error('Error parsing JSON response:', error);
+                    });
+                });
+            })
+            .catch(function (error) {
+                console.error('Error accessing camera:', error);
+            });
+    </script>
+</body>
+</html>
